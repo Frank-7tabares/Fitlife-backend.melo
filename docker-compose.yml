@@ -1,0 +1,15 @@
+# MariaDB para FitLife - Ejecutar: docker compose up -d
+services:
+  db:
+    image: mariadb:11
+    container_name: fitlife-db
+    ports:
+      - "13306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: fitlife
+      MYSQL_DATABASE: fitlife_db
+    volumes:
+      - fitlife_db_data:/var/lib/mysql
+
+volumes:
+  fitlife_db_data:

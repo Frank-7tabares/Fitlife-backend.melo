@@ -1,0 +1,332 @@
+### FitLife Backend — API Examples
+### Compatible con: VS Code REST Client, JetBrains HTTP Client
+### Instalar extensión: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+###
+### INSTRUCCIONES:
+### 1. Ejecuta primero "Register" y copia el `id` del usuario
+### 2. Ejecuta "Login" y copia el `access_token`
+### 3. Reemplaza {{user_id}} y {{token}} en las variables de abajo
+### 4. Ejecuta el resto de ejemplos en orden
+
+@base_url = http://localhost:8000/api/v1
+
+# Reemplaza estos valores después de hacer Register y Login
+@user_id = 00000000-0000-0000-0000-000000000000
+@instructor_id = 00000000-0000-0000-0000-000000000000
+@routine_id = 00000000-0000-0000-0000-000000000000
+@exercise_id = 00000000-0000-0000-0000-000000000000
+@token = your_access_token_here
+
+
+# ===========================================================================
+# 🔐 AUTENTICACIÓN
+# ===========================================================================
+
+### [1] Registrar usuario (Usuario regular)
+POST {{base_url}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "carlos.perez@fitlife.com",
+  "password": "MiPassword123!",
+  "full_name": "Carlos Pérez"
+}
+
+###
+
+### [2] Registrar instructor
+POST {{base_url}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "instructor.ana@fitlife.com",
+  "password": "InstructorPass456!",
+  "full_name": "Ana Rodríguez"
+}
+
+###
+
+### [3] Login — obtener tokens JWT
+# Copia el access_token y actualiza la variable @token arriba
+POST {{base_url}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "carlos.perez@fitlife.com",
+  "password": "MiPassword123!"
+}
+
+###
+
+
+# ===========================================================================
+# 👤 PERFIL DE USUARIO
+# ===========================================================================
+
+### [4] Obtener perfil del usuario
+# Reemplaza {{user_id}} con el UUID obtenido en el registro
+GET {{base_url}}/users/{{user_id}}/profile
+Authorization: Bearer {{token}}
+
+###
+
+### [5] Actualizar perfil del usuario
+# IMPORTANTE: El campo "version" es obligatorio (optimistic locking).
+# Obtén el valor actual con GET /profile y úsalo aquí.
+PATCH {{base_url}}/users/{{user_id}}/profile
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "full_name": "Carlos A. Pérez",
+  "gender": "male",
+  "age": 28,
+  "height": 178.0,
+  "fitness_goal": "Ganar masa muscular",
+  "activity_level": "MODERATE",
+  "version": 1
+}
+
+###
+
+
+# ===========================================================================
+# 🏋️ EVALUACIÓN FÍSICA (FITNESS ASSESSMENT)
+# ===========================================================================
+
+### [6] Enviar evaluación de condición física
+# El sistema calcula automáticamente: fitness_score, category, body_age y comparison
+POST {{base_url}}/assessments
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "user_id": "{{user_id}}",
+  "real_age": 28,
+  "responses": {
+    "pushups": 20,
+    "run_minutes": 8,
+    "flexibility": 7,
+    "sleep_hours": 7,
+    "stress_level": 4
+  }
+}
+
+###
+
+### [7] Historial de evaluaciones del usuario
+GET {{base_url}}/assessments/user/{{user_id}}
+Authorization: Bearer {{token}}
+
+###
+
+
+# ===========================================================================
+# 📊 REGISTROS FÍSICOS (Peso, medidas, IMC)
+# ===========================================================================
+
+### [8] Registrar medidas físicas
+# El BMI (IMC) se calcula automáticamente a partir de weight y height
+POST {{base_url}}/users/{{user_id}}/physical-records
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "weight": 75.5,
+  "height": 178.0,
+  "body_fat_percentage": 17.0,
+  "waist": 82.0,
+  "hip": 95.0,
+  "activity_level": "MODERATE"
+}
+
+###
+
+### [9] Segundo registro (para ver progreso)
+POST {{base_url}}/users/{{user_id}}/physical-records
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "weight": 74.8,
+  "height": 178.0,
+  "body_fat_percentage": 16.5,
+  "waist": 81.0,
+  "hip": 94.5,
+  "activity_level": "ACTIVE"
+}
+
+###
+
+### [10] Historial de registros físicos
+GET {{base_url}}/users/{{user_id}}/physical-records
+Authorization: Bearer {{token}}
+
+###
+
+
+# ===========================================================================
+# 🏃 RUTINAS DE ENTRENAMIENTO
+# ===========================================================================
+
+### [11] Crear rutina de entrenamiento (instructor)
+# Reemplaza {{instructor_id}} con el UUID del instructor
+# Reemplaza {{exercise_id}} con un UUID de ejercicio existente en tu BD
+POST {{base_url}}/training/routines
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Rutina Fuerza Principiante",
+  "description": "Rutina de 3 días para construir fuerza base con ejercicios compuestos",
+  "goal": "Desarrollar fuerza y masa muscular inicial",
+  "level": "BEGINNER",
+  "creator_id": "{{instructor_id}}",
+  "exercises": [
+    {
+      "exercise_id": "{{exercise_id}}",
+      "sets": 3,
+      "reps": 12,
+      "rest_seconds": 60
+    },
+    {
+      "exercise_id": "{{exercise_id}}",
+      "sets": 4,
+      "reps": 8,
+      "rest_seconds": 90
+    }
+  ]
+}
+
+###
+
+### [12] Asignar rutina al usuario
+# Reemplaza {{routine_id}} con el UUID de la rutina creada
+POST {{base_url}}/users/{{user_id}}/routines/assign
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "routine_id": "{{routine_id}}"
+}
+
+###
+
+### [13] Ver rutina activa del usuario
+GET {{base_url}}/users/{{user_id}}/routines/active
+Authorization: Bearer {{token}}
+
+###
+
+### [14] Registrar entrenamiento completado
+# effort_level: 1 (muy fácil) — 10 (máximo esfuerzo)
+POST {{base_url}}/workouts/complete?user_id={{user_id}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "effort_level": 7,
+  "notes": "Aumenté el peso en press banca. Me sentí muy bien con la rutina."
+}
+
+###
+
+
+# ===========================================================================
+# 🥗 PLANES DE NUTRICIÓN
+# ===========================================================================
+
+### [15] Crear plan de nutrición semanal
+# day_of_week: 0=Lunes, 1=Martes, ..., 6=Domingo
+POST {{base_url}}/nutrition/plans?user_id={{user_id}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Plan Hiperproteico - Semana 9",
+  "description": "Plan con superávit calórico enfocado en ganancia muscular limpia",
+  "week_number": 9,
+  "year": 2026,
+  "is_active": true,
+  "daily_plans": [
+    {
+      "day_of_week": 0,
+      "meals": [
+        {
+          "name": "Desayuno",
+          "description": "Avena con plátano, arándanos y proteína en polvo",
+          "calories": 550,
+          "protein": 38.0,
+          "carbs": 72.0,
+          "fats": 10.0
+        },
+        {
+          "name": "Almuerzo",
+          "description": "Pechuga de pollo a la plancha con arroz integral y brócoli",
+          "calories": 620,
+          "protein": 52.0,
+          "carbs": 65.0,
+          "fats": 12.0
+        },
+        {
+          "name": "Cena",
+          "description": "Salmón al horno con batata y espinacas salteadas",
+          "calories": 580,
+          "protein": 45.0,
+          "carbs": 50.0,
+          "fats": 18.0
+        }
+      ]
+    },
+    {
+      "day_of_week": 1,
+      "meals": [
+        {
+          "name": "Desayuno",
+          "description": "Huevos revueltos con aguacate y pan integral",
+          "calories": 480,
+          "protein": 28.0,
+          "carbs": 38.0,
+          "fats": 22.0
+        },
+        {
+          "name": "Almuerzo",
+          "description": "Atún con pasta integral y tomates cherry",
+          "calories": 590,
+          "protein": 48.0,
+          "carbs": 62.0,
+          "fats": 10.0
+        },
+        {
+          "name": "Cena",
+          "description": "Carne magra con ensalada verde y quinoa",
+          "calories": 560,
+          "protein": 42.0,
+          "carbs": 45.0,
+          "fats": 15.0
+        }
+      ]
+    }
+  ]
+}
+
+###
+
+### [16] Ver plan de nutrición activo del usuario
+GET {{base_url}}/users/{{user_id}}/nutrition/active
+Authorization: Bearer {{token}}
+
+###
+
+
+# ===========================================================================
+# ✅ HEALTH CHECK
+# ===========================================================================
+
+### Verificar que el servidor está corriendo
+GET http://localhost:8000/
+
+###
+
+### Documentación interactiva (abrir en navegador)
+# GET http://localhost:8000/docs
