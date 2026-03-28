@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pathlib import Path
 from uuid import uuid4
@@ -23,14 +24,23 @@ def _make_log_reset():
             pass
     return _write
 
-def _reset_link_for_logs(reset_token_value: str) -> str:
-    base = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+async def _send_password_reset_email_safe(to_email: str, reset_token_value: str, user_name: str) -> None:
+    _log_reset = _make_log_reset()
     try:
-        if hasattr(settings, 'cors_origins_list') and settings.cors_origins_list:
-            base = settings.cors_origins_list[0]
-    except Exception:
-        pass
-    return f"{base.rstrip('/')}/auth/reset-password?token={reset_token_value}"
+        sent = await SmtpEmailService.send_password_reset_email(
+            to_email=to_email, reset_token=reset_token_value, user_name=user_name
+        )
+        if sent:
+            print(f'[PasswordReset] Email enviado a {to_email}', flush=True)
+            _log_reset('EMAIL_ENVIADO', to_email)
+        else:
+            print('[PasswordReset] SmtpEmailService no pudo enviar', flush=True)
+            _log_reset('EMAIL_NO_ENVIADO', 'SmtpEmailService retornó False')
+    except Exception as e:
+        print(f'[PasswordReset] Error enviando email: {e}', flush=True)
+        _log_reset('EMAIL_ERROR', str(e))
+        logger.exception('Password reset email background task failed')
+
 
 class PasswordResetRequest:
 
@@ -52,29 +62,14 @@ class PasswordResetRequest:
             _make_log_reset()('USUARIO_NO_ENCONTRADO', email)
         reset_token_value = f'{secrets.randbelow(1000000):06d}'
         expires_at = datetime.utcnow() + timedelta(hours=1)
-        reset_link = None
-        email_sent = False
         if user:
             reset_token = PasswordResetToken(id=uuid4(), user_id=user.id, token=reset_token_value, expires_at=expires_at, status=ResetTokenStatus.PENDING, created_at=datetime.utcnow())
             await self.reset_token_repository.save(reset_token)
-            reset_link = _reset_link_for_logs(reset_token_value)
             user_name = (user.full_name or 'Usuario').replace('"', "'").replace('\n', ' ')[:50]
-            _log_reset = _make_log_reset()
-            try:
-                sent = await SmtpEmailService.send_password_reset_email(to_email=user.email, reset_token=reset_token_value, user_name=user_name)
-                if sent:
-                    print(f'[PasswordReset] Email enviado a {user.email}', flush=True)
-                    _log_reset('EMAIL_ENVIADO', user.email)
-                    email_sent = True
-                else:
-                    print('[PasswordReset] SmtpEmailService no pudo enviar', flush=True)
-                    _log_reset('EMAIL_NO_ENVIADO', 'SmtpEmailService retornó False')
-            except Exception as e:
-                print(f'[PasswordReset] Error enviando email: {e}', flush=True)
-                _log_reset('EMAIL_ERROR', str(e))
+            asyncio.create_task(_send_password_reset_email_safe(user.email, reset_token_value, user_name))
         response = {'message': 'Si el email está registrado, recibirás un código de verificación para cambiar la contraseña.'}
         debug_data = {'user_found': bool(user), '_backend': 'fitlife-local'}
         if getattr(settings, 'DEBUG', False) and user:
-            debug_data['email_sent'] = email_sent
+            debug_data['email_send'] = 'background'
         response['debug'] = debug_data
         return response
