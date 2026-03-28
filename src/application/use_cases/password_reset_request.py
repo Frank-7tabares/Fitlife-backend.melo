@@ -1,9 +1,11 @@
 import asyncio
 import logging
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 from datetime import datetime, timedelta
 import secrets
+from starlette.background import BackgroundTasks
 from ...domain.repositories.user_repository import UserRepository
 from ...domain.repositories.password_reset_token_repository import PasswordResetTokenRepository
 from ...domain.entities.password_reset_token import PasswordResetToken, ResetTokenStatus
@@ -48,7 +50,7 @@ class PasswordResetRequest:
         self.user_repository = user_repository
         self.reset_token_repository = reset_token_repository
 
-    async def execute(self, request: PasswordResetRequestDto) -> dict:
+    async def execute(self, request: PasswordResetRequestDto, background_tasks: Optional[BackgroundTasks]=None) -> dict:
         email = str(request.email).strip().lower()
         user = await self.user_repository.find_by_email(email)
         found = 'sí' if user else 'NO'
@@ -66,7 +68,10 @@ class PasswordResetRequest:
             reset_token = PasswordResetToken(id=uuid4(), user_id=user.id, token=reset_token_value, expires_at=expires_at, status=ResetTokenStatus.PENDING, created_at=datetime.utcnow())
             await self.reset_token_repository.save(reset_token)
             user_name = (user.full_name or 'Usuario').replace('"', "'").replace('\n', ' ')[:50]
-            asyncio.create_task(_send_password_reset_email_safe(user.email, reset_token_value, user_name))
+            if background_tasks is not None:
+                background_tasks.add_task(_send_password_reset_email_safe, user.email, reset_token_value, user_name)
+            else:
+                asyncio.create_task(_send_password_reset_email_safe(user.email, reset_token_value, user_name))
         response = {'message': 'Si el email está registrado, recibirás un código de verificación para cambiar la contraseña.'}
         debug_data = {'user_found': bool(user), '_backend': 'fitlife-local'}
         if getattr(settings, 'DEBUG', False) and user:
