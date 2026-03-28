@@ -79,6 +79,8 @@ class TestSendMessage:
         user_repo = AsyncMock()
         user_repo.find_by_id.return_value = None
         instructor_repo = AsyncMock()
+        # Resolución instructors.id → users.id: sin fila instructor, se vuelve a pedir el mismo UUID al user_repo.
+        instructor_repo.find_by_id.return_value = None
 
         use_case = SendMessage(message_repo, user_repo, instructor_repo)
         

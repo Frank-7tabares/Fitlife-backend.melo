@@ -52,11 +52,14 @@ class InstructorUseCases:
             certificate_status=instructor.certificate_status,
         )
 
-    async def list_instructors(self) -> List[InstructorResponse]:
-        """Lista todos los instructores con calificación y conteo de usuarios activos (RF-043, RF-044)."""
+    async def list_instructors(self, *, verified_only: bool = True) -> List[InstructorResponse]:
+        """Lista instructores. Por defecto solo profesionales verificados (chat y asignación)."""
         models = await self.instructor_repo.find_all()
         result = []
         for m in models:
+            st = getattr(m, "certificate_status", None) or "pending"
+            if verified_only and st != "verified":
+                continue
             count = await self.assignment_repo.count_active_by_instructor(UUID(m.id))
             result.append(
                 InstructorResponse(
@@ -67,7 +70,7 @@ class InstructorUseCases:
                     rating_avg=float(m.rating_avg),
                     active_users_count=count,
                     certificate_url=getattr(m, "certificate_url", None),
-                    certificate_status=getattr(m, "certificate_status", "pending"),
+                    certificate_status=st,
                 )
             )
         return result
@@ -78,6 +81,7 @@ class InstructorUseCases:
         if not m:
             return None
         count = await self.assignment_repo.count_active_by_instructor(instructor_id)
+        st = getattr(m, "certificate_status", None) or "pending"
         return InstructorResponse(
             id=UUID(m.id),
             name=m.name,
@@ -86,7 +90,7 @@ class InstructorUseCases:
             rating_avg=float(m.rating_avg),
             active_users_count=count,
             certificate_url=getattr(m, "certificate_url", None),
-            certificate_status=getattr(m, "certificate_status", "pending"),
+            certificate_status=st,
         )
 
     async def assign_instructor(self, user_id: UUID, request: AssignInstructorRequest) -> None:
@@ -94,6 +98,9 @@ class InstructorUseCases:
         instructor = await self.instructor_repo.find_by_id(request.instructor_id)
         if not instructor:
             raise ValueError("Instructor not found")
+        st = getattr(instructor, "certificate_status", None) or "pending"
+        if st != "verified":
+            raise ValueError("Instructor must be verified before assignment")
 
         await self.assignment_repo.deactivate_active_for_user(user_id)
 

@@ -136,4 +136,7 @@ async def run_migrations():
 
 
 if __name__ == "__main__":
+    from src.infrastructure.database.win_asyncio import apply_windows_ssl_asyncio_fix
+
+    apply_windows_ssl_asyncio_fix()
     asyncio.run(run_migrations())

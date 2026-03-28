@@ -340,7 +340,13 @@ class TestInstructorRoutes:
         iid = uuid4()
         mock_uc = AsyncMock()
         mock_uc.get_instructor_by_id.return_value = InstructorResponse(
-            id=iid, name="Ana", certifications=["NASM"], specializations="", rating_avg=4.0, active_users_count=1
+            id=iid,
+            name="Ana",
+            certifications=["NASM"],
+            specializations="",
+            rating_avg=4.0,
+            active_users_count=1,
+            certificate_status="verified",
         )
 
         async def override_uc(db=None):

@@ -17,8 +17,8 @@ from ....application.dtos.instructor_dtos import (
     AssignInstructorRequest,
     RateInstructorRequest,
 )
-from ..dependencies import get_current_admin
-from ....domain.entities.user import User
+from ..dependencies import get_current_admin, get_current_user_optional
+from ....domain.entities.user import User, UserRole
 
 router = APIRouter(prefix="/instructors", tags=["Instructors"])
 
@@ -48,21 +48,34 @@ async def create_instructor(
 
 @router.get("", response_model=List[InstructorResponse])
 async def list_instructors(
+    include_pending: bool = Query(False, description="Solo admin: incluir instructores no verificados"),
+    viewer: Optional[User] = Depends(get_current_user_optional),
     use_cases: InstructorUseCases = Depends(get_instructor_use_cases),
 ):
-    """Lista todos los instructores con nombre, certificaciones, calificación y conteo de usuarios activos."""
-    return await use_cases.list_instructors()
+    """Lista instructores verificados (profesionales aprobados). Opcionalmente todo el catálogo (solo admin)."""
+    if include_pending:
+        if not viewer or viewer.role != UserRole.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo los administradores pueden listar instructores pendientes",
+            )
+        return await use_cases.list_instructors(verified_only=False)
+    return await use_cases.list_instructors(verified_only=True)
 
 
 @router.get("/{instructor_id}", response_model=InstructorResponse)
 async def get_instructor(
     instructor_id: UUID,
+    viewer: Optional[User] = Depends(get_current_user_optional),
     use_cases: InstructorUseCases = Depends(get_instructor_use_cases),
 ):
-    """Detalle de un instructor."""
+    """Detalle de un instructor. Atletas e invitados: solo instructores verificados."""
     instructor = await use_cases.get_instructor_by_id(instructor_id)
     if not instructor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+    if instructor.certificate_status != "verified":
+        if not viewer or viewer.role != UserRole.ADMIN:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
     return instructor
 
 

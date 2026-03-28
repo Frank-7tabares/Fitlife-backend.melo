@@ -40,6 +40,21 @@ class ConversationResponse(BaseModel):
     messages: List[MessageResponse]
 
 
+class InboxThreadItem(BaseModel):
+    """Resumen de conversación para bandeja tipo inbox (coach/admin)."""
+    peer_id: UUID
+    peer_name: str
+    peer_email: Optional[str] = None
+    last_message_preview: str
+    last_message_at: datetime
+    last_message_from_me: bool
+    unread_count: int
+
+
+class CoachInboxResponse(BaseModel):
+    threads: List[InboxThreadItem]
+
+
 class MarkAsReadRequest(BaseModel):
     """Solicitud para marcar mensaje como leído (RF-091)."""
     message_id: UUID

@@ -1,7 +1,7 @@
 """Interfaz de repositorio para Message."""
 from abc import ABC, abstractmethod
 from uuid import UUID
-from typing import List, Sequence
+from typing import List, Sequence, Dict
 from src.domain.entities.message import Message
 
 
@@ -53,4 +53,14 @@ class MessageRepository(ABC):
     @abstractmethod
     async def mark_thread_read_for_recipient(self, recipient_id: UUID, sender_id: UUID) -> None:
         """Marca como leídos todos los mensajes de sender_id hacia recipient_id."""
+        pass
+
+    @abstractmethod
+    async def get_messages_involving_user(self, user_id: UUID, limit: int = 2000) -> List[Message]:
+        """Mensajes donde user_id es remitente o destinatario, más recientes primero."""
+        pass
+
+    @abstractmethod
+    async def count_unread_by_sender_for_recipient(self, recipient_id: UUID) -> Dict[UUID, int]:
+        """Por cada remitente, cuántos mensajes no leídos tiene recipient_id."""
         pass

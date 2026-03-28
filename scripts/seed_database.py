@@ -11,13 +11,17 @@ os.environ.setdefault("DEBUG", "False")
 from dotenv import load_dotenv
 load_dotenv()
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from src.config.settings import settings
 
-DATABASE_URL = (
-    f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-    f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-)
+
+def _seed_engine():
+    kw: dict = {"echo": False}
+    ca = settings.mysql_connect_args()
+    if ca:
+        kw["connect_args"] = ca
+    return create_async_engine(settings.get_database_url(), **kw)
 
 SEED_USERS = [
     {"email": "admin@fitlife.com",      "password": "Admin123!", "role": "ADMIN",      "full_name": "Administrador FitLife"},
@@ -60,7 +64,6 @@ async def seed_instructors(session: AsyncSession) -> None:
     from src.infrastructure.database.models.instructor_models import InstructorModel
     from src.infrastructure.database.models.user_model import UserModel
     from sqlalchemy import select
-    from uuid import uuid4
 
     result = await session.execute(
         select(UserModel).where(UserModel.email == "instructor@fitlife.com")
@@ -71,19 +74,20 @@ async def seed_instructors(session: AsyncSession) -> None:
         return
 
     result = await session.execute(
-        select(InstructorModel).where(InstructorModel.user_id == instructor_user.id)
+        select(InstructorModel).where(InstructorModel.id == instructor_user.id)
     )
     if result.scalar_one_or_none():
         print("  [SKIP] Instructor ya existe")
         return
 
+    # Mismo UUID que users.id para mensajes/asignaciones sin ambigüedad.
     model = InstructorModel(
-        id=str(uuid4()),
-        user_id=instructor_user.id,
+        id=str(instructor_user.id),
         name="Carlos Instructor",
         certifications=["ACE", "NSCA"],
         specializations="Fuerza y acondicionamiento físico",
         rating_avg=0.0,
+        certificate_status="verified",
     )
     session.add(model)
     await session.commit()
@@ -121,7 +125,7 @@ async def seed_exercises(session: AsyncSession) -> None:
 
 async def main():
     print("=== FitLife Database Seed ===\n")
-    engine = create_async_engine(DATABASE_URL, echo=False)
+    engine = _seed_engine()
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with session_factory() as session:
@@ -137,4 +141,7 @@ async def main():
 
 
 if __name__ == "__main__":
+    from src.infrastructure.database.win_asyncio import apply_windows_ssl_asyncio_fix
+
+    apply_windows_ssl_asyncio_fix()
     asyncio.run(main())

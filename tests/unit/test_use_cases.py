@@ -499,10 +499,33 @@ class TestInstructorUseCases:
         instructor_repo.find_all.return_value = []
         assert await use_cases.list_instructors() == []
         mid = uuid4()
-        instructor_repo.find_all.return_value = [InstructorModel(id=str(mid), name="Ana", certifications=["ACE"], specializations="Fuerza", rating_avg=4.5)]
+        instructor_repo.find_all.return_value = [
+            InstructorModel(
+                id=str(mid),
+                name="Ana",
+                certifications=["ACE"],
+                specializations="Fuerza",
+                rating_avg=4.5,
+                certificate_status="verified",
+            )
+        ]
         assignment_repo.count_active_by_instructor.return_value = 3
         result = await use_cases.list_instructors()
         assert len(result) == 1 and result[0].name == "Ana" and result[0].rating_avg == 4.5 and result[0].active_users_count == 3
+
+    @pytest.mark.asyncio
+    async def test_list_instructors_skips_non_verified_by_default(self, use_cases, instructor_repo, assignment_repo):
+        from src.infrastructure.database.models.instructor_models import InstructorModel
+        v, p = uuid4(), uuid4()
+        instructor_repo.find_all.return_value = [
+            InstructorModel(id=str(v), name="Veri", certifications=[], specializations="", rating_avg=0.0, certificate_status="verified"),
+            InstructorModel(id=str(p), name="Pend", certifications=[], specializations="", rating_avg=0.0, certificate_status="pending"),
+        ]
+        assignment_repo.count_active_by_instructor.return_value = 0
+        out = await use_cases.list_instructors()
+        assert len(out) == 1 and out[0].name == "Veri"
+        out_all = await use_cases.list_instructors(verified_only=False)
+        assert len(out_all) == 2
 
     @pytest.mark.asyncio
     async def test_get_instructor_by_id_found_and_not_found(self, use_cases, instructor_repo, assignment_repo):
@@ -523,7 +546,14 @@ class TestInstructorUseCases:
         with pytest.raises(ValueError, match="not found"):
             await use_cases.assign_instructor(uuid4(), AssignInstructorRequest(instructor_id=uuid4()))
         uid, iid = uuid4(), uuid4()
-        instructor_repo.find_by_id.return_value = InstructorModel(id=str(iid), name="Coach", certifications=[], specializations="", rating_avg=0.0)
+        instructor_repo.find_by_id.return_value = InstructorModel(
+            id=str(iid),
+            name="Coach",
+            certifications=[],
+            specializations="",
+            rating_avg=0.0,
+            certificate_status="verified",
+        )
         assignment_repo.deactivate_active_for_user.return_value = None
         assignment_repo.save.return_value = None
         await use_cases.assign_instructor(uid, AssignInstructorRequest(instructor_id=iid))
@@ -531,15 +561,29 @@ class TestInstructorUseCases:
         assignment_repo.save.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_rate_instructor_success_and_not_assigned(self, use_cases, instructor_repo, assignment_repo, rating_repo):
-        from src.application.dtos.instructor_dtos import RateInstructorRequest
-        from src.domain.entities.instructor import InstructorAssignment
+    async def test_assign_instructor_rejects_not_verified(self, use_cases, instructor_repo, assignment_repo):
+        from src.application.dtos.instructor_dtos import AssignInstructorRequest
         from src.infrastructure.database.models.instructor_models import InstructorModel
-        assignment_repo.find_active_by_user.return_value = None
-        with pytest.raises(ValueError, match="not assigned"):
+        uid, iid = uuid4(), uuid4()
+        instructor_repo.find_by_id.return_value = InstructorModel(
+            id=str(iid),
+            name="Coach",
+            certifications=[],
+            specializations="",
+            rating_avg=0.0,
+            certificate_status="pending",
+        )
+        with pytest.raises(ValueError, match="verified"):
+            await use_cases.assign_instructor(uid, AssignInstructorRequest(instructor_id=iid))
+
+    @pytest.mark.asyncio
+    async def test_rate_instructor_not_found_and_success(self, use_cases, instructor_repo, rating_repo):
+        from src.application.dtos.instructor_dtos import RateInstructorRequest
+        from src.infrastructure.database.models.instructor_models import InstructorModel
+        instructor_repo.find_by_id.return_value = None
+        with pytest.raises(ValueError, match="not found"):
             await use_cases.rate_instructor(uuid4(), uuid4(), RateInstructorRequest(rating=5))
         uid, iid = uuid4(), uuid4()
-        assignment_repo.find_active_by_user.return_value = InstructorAssignment(id=uuid4(), user_id=uid, instructor_id=iid, started_at=datetime.utcnow(), ended_at=None, is_active=True)
         instructor_repo.find_by_id.return_value = InstructorModel(id=str(iid), name="C", certifications=[], specializations="", rating_avg=0.0)
         rating_repo.save.return_value = None
         rating_repo.get_average_rating.return_value = 4.0

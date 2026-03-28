@@ -1,8 +1,8 @@
 """Repositorio SQLAlchemy para Message."""
 from uuid import UUID
 from datetime import datetime
-from typing import List, Optional, Sequence
-from sqlalchemy import select, and_, or_, desc, asc, update
+from typing import List, Optional, Sequence, Dict
+from sqlalchemy import select, and_, or_, desc, asc, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.repositories.message_repository import MessageRepository
 from src.domain.entities.message import Message, MessageType
@@ -150,6 +150,34 @@ class SQLAlchemyMessageRepository(MessageRepository):
         )
         await self.session.execute(stmt)
         await self.session.commit()
+
+    async def get_messages_involving_user(self, user_id: UUID, limit: int = 2000) -> List[Message]:
+        uid = str(user_id)
+        stmt = (
+            select(MessageModel)
+            .where(
+                or_(MessageModel.sender_id == uid, MessageModel.recipient_id == uid),
+            )
+            .order_by(desc(MessageModel.created_at))
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+        return [self._map_to_entity(model) for model in models]
+
+    async def count_unread_by_sender_for_recipient(self, recipient_id: UUID) -> Dict[UUID, int]:
+        stmt = (
+            select(MessageModel.sender_id, func.count(MessageModel.id))
+            .where(
+                and_(
+                    MessageModel.recipient_id == str(recipient_id),
+                    MessageModel.is_read == False,
+                )
+            )
+            .group_by(MessageModel.sender_id)
+        )
+        result = await self.session.execute(stmt)
+        return {UUID(sid): int(cnt) for sid, cnt in result.all()}
 
     def _map_to_entity(self, model: MessageModel) -> Message:
         """Mapea modelo de BD a entidad de dominio."""

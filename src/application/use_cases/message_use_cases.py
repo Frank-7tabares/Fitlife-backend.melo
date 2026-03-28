@@ -15,6 +15,8 @@ from src.application.dtos.message_dtos import (
     MessageResponse,
     MessageListResponse,
     ConversationResponse,
+    InboxThreadItem,
+    CoachInboxResponse,
 )
 
 
@@ -34,8 +36,8 @@ async def resolve_coach_user_id_for_profile(
 ) -> UUID:
     """assignment.instructor_id apunta a instructors.id; los mensajes usan users.id.
 
-    Si no hay fila de usuario con ese id (coach creado por admin), intenta emparejar
-    por nombre con un usuario rol INSTRUCTOR.
+    Orden: mismo UUID en users → nombre exacto del perfil → coincidencia parcial (contiene).
+    (Sin columna extra en BD: compatible con esquemas ya desplegados.)
     """
     linked = await user_repo.find_by_id(profile_instructor_id)
     if linked:
@@ -44,8 +46,14 @@ async def resolve_coach_user_id_for_profile(
     if not prof or not prof.name:
         return profile_instructor_id
     target = _norm_name(prof.name)
-    for cand in await user_repo.find_by_role(UserRole.INSTRUCTOR.value):
-        if _norm_name(cand.full_name) == target:
+    candidates = await user_repo.find_by_role(UserRole.INSTRUCTOR.value)
+    for cand in candidates:
+        cn = _norm_name(cand.full_name)
+        if cn == target:
+            return cand.id
+    for cand in candidates:
+        cn = _norm_name(cand.full_name)
+        if target and cn and (target in cn or cn in target):
             return cand.id
     return profile_instructor_id
 
@@ -86,9 +94,16 @@ async def assert_can_converse_async(
 ) -> None:
     if peer_id == current_user.id:
         raise ValueError("Usuario inválido en la conversación")
+    # El cliente puede usar instructors.id como peer; los mensajes y users usan users.id.
     peer = await user_repo.find_by_id(peer_id)
     if not peer:
+        resolved = await resolve_coach_user_id_for_profile(
+            peer_id, user_repo, instructor_repo
+        )
+        peer = await user_repo.find_by_id(resolved)
+    if not peer:
         raise ValueError("Usuario no encontrado")
+    canonical_peer_id = peer.id
     if current_user.role == UserRole.ADMIN:
         return
     if current_user.role == UserRole.USER:
@@ -97,14 +112,20 @@ async def assert_can_converse_async(
             allowed = await allowed_coach_ids_for_assignment(
                 asn.instructor_id, user_repo, instructor_repo
             )
-            if not _uuid_in(peer_id, allowed):
+            if not _uuid_in(peer_id, allowed) and not _uuid_in(canonical_peer_id, allowed):
                 raise ValueError("No puedes ver esta conversación")
         else:
             # Fallback: si no existe asignación activa en BD, aún permitimos
             # ver el hilo si el coach ya te envió mensajes.
             if not message_repo:
                 raise ValueError("No puedes ver esta conversación")
-            convo = await message_repo.get_by_sender_and_recipient(peer_id, current_user.id, limit=1)
+            convo = await message_repo.get_by_sender_and_recipient(
+                canonical_peer_id, current_user.id, limit=1
+            )
+            if not convo:
+                convo = await message_repo.get_by_sender_and_recipient(
+                    peer_id, current_user.id, limit=1
+                )
             if not convo:
                 raise ValueError("No puedes ver esta conversación")
     elif current_user.role == UserRole.INSTRUCTOR:
@@ -129,9 +150,17 @@ class SendMessage:
         self.instructor_repo = instructor_repo
 
     async def execute(self, sender_id: UUID, request: SendMessageRequest) -> MessageResponse:
+        # Destinatario siempre es un users.id. El cliente puede enviar instructors.id
+        # (mismo UUID que la fila de `instructors`); lo resolvemos al usuario del coach.
         recipient = await self.user_repo.find_by_id(request.recipient_id)
         if not recipient:
+            resolved_uid = await resolve_coach_user_id_for_profile(
+                request.recipient_id, self.user_repo, self.instructor_repo
+            )
+            recipient = await self.user_repo.find_by_id(resolved_uid)
+        if not recipient:
             raise ValueError("Recipient user not found")
+        recipient_user_id = recipient.id
 
         sender_user = await self.user_repo.find_by_id(sender_id)
         if not sender_user:
@@ -154,7 +183,7 @@ class SendMessage:
                 if recipient.role not in (UserRole.INSTRUCTOR, UserRole.ADMIN):
                     raise ValueError("Solo puedes escribir a tu instructor asignado")
                 prior = await self.message_repo.get_by_sender_and_recipient(
-                    request.recipient_id,
+                    recipient_user_id,
                     sender_id,
                     skip=0,
                     limit=1,
@@ -165,7 +194,9 @@ class SendMessage:
                 allowed = await allowed_coach_ids_for_assignment(
                     assignment.instructor_id, self.user_repo, self.instructor_repo
                 )
-                if not _uuid_in(request.recipient_id, allowed):
+                if not _uuid_in(recipient_user_id, allowed) and not _uuid_in(
+                    request.recipient_id, allowed
+                ):
                     raise ValueError("Solo puedes escribir a tu instructor asignado")
 
         elif request.message_type == MessageType.SYSTEM_NOTIFICATION:
@@ -176,7 +207,7 @@ class SendMessage:
         message = Message(
             id=uuid4(),
             sender_id=sender_id,
-            recipient_id=request.recipient_id,
+            recipient_id=recipient_user_id,
             subject=request.subject,
             content=request.content,
             message_type=request.message_type,
@@ -347,3 +378,53 @@ class MarkMessageAsRead:
 
     async def execute(self, message_id: UUID) -> None:
         await self.message_repo.mark_as_read(message_id)
+
+
+class GetCoachInbox:
+    """Lista conversaciones del coach/admin con último mensaje y no leídos por atleta."""
+
+    def __init__(self, message_repo: MessageRepository, user_repo: UserRepository):
+        self.message_repo = message_repo
+        self.user_repo = user_repo
+
+    async def execute(self, current_user: User) -> CoachInboxResponse:
+        if current_user.role not in (UserRole.INSTRUCTOR, UserRole.ADMIN):
+            raise ValueError("Solo instructores o administradores pueden ver esta bandeja")
+        coach_id = current_user.id
+        msgs = await self.message_repo.get_messages_involving_user(coach_id)
+        unread_map = await self.message_repo.count_unread_by_sender_for_recipient(coach_id)
+
+        last_by_peer: dict[UUID, Message] = {}
+        for m in msgs:
+            peer = m.recipient_id if m.sender_id == coach_id else m.sender_id
+            if peer not in last_by_peer:
+                last_by_peer[peer] = m
+
+        items: list[InboxThreadItem] = []
+        for peer_id, last in last_by_peer.items():
+            peer_user = await self.user_repo.find_by_id(peer_id)
+            if not peer_user:
+                continue
+            if current_user.role == UserRole.INSTRUCTOR and peer_user.role != UserRole.USER:
+                continue
+            raw = last.content or ""
+            preview = raw[:120] + ("…" if len(raw) > 120 else "")
+            items.append(
+                InboxThreadItem(
+                    peer_id=peer_id,
+                    peer_name=(peer_user.full_name or "").strip() or (peer_user.email or "Usuario"),
+                    peer_email=peer_user.email,
+                    last_message_preview=preview,
+                    last_message_at=last.created_at,
+                    last_message_from_me=last.sender_id == coach_id,
+                    unread_count=unread_map.get(peer_id, 0),
+                )
+            )
+
+        items.sort(
+            key=lambda x: (
+                0 if x.unread_count > 0 else 1,
+                -x.last_message_at.timestamp(),
+            )
+        )
+        return CoachInboxResponse(threads=items)

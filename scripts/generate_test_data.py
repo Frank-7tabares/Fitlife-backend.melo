@@ -20,16 +20,20 @@ except ImportError:
     print("ERROR: Instala 'faker' con: pip install faker")
     sys.exit(1)
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from src.config.settings import settings
 from src.infrastructure.security.password_hasher import PasswordHasher
 
 fake = Faker("es_CO")
 
-DATABASE_URL = (
-    f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-    f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-)
+
+def _seed_engine():
+    kw: dict = {"echo": False}
+    ca = settings.mysql_connect_args()
+    if ca:
+        kw["connect_args"] = ca
+    return create_async_engine(settings.get_database_url(), **kw)
 
 NUM_USERS = int(os.getenv("SEED_USERS", "20"))
 NUM_ASSESSMENTS = int(os.getenv("SEED_ASSESSMENTS", "40"))
@@ -91,7 +95,7 @@ async def generate_assessments(session: AsyncSession, users: list) -> None:
 
 async def main():
     print("=== FitLife Test Data Generator ===\n")
-    engine = create_async_engine(DATABASE_URL, echo=False)
+    engine = _seed_engine()
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with session_factory() as session:
@@ -105,4 +109,7 @@ async def main():
 
 
 if __name__ == "__main__":
+    from src.infrastructure.database.win_asyncio import apply_windows_ssl_asyncio_fix
+
+    apply_windows_ssl_asyncio_fix()
     asyncio.run(main())

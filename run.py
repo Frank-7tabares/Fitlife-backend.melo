@@ -1,11 +1,14 @@
 """
 Arranca el servidor backend. Mantén esta ventana abierta mientras usas el frontend.
 """
-import sys
 import os
+import sys
 import uvicorn
 
 if __name__ == "__main__":
+    from src.infrastructure.database.win_asyncio import apply_windows_ssl_asyncio_fix
+
+    apply_windows_ssl_asyncio_fix()
     os.environ.setdefault("PYTHONUNBUFFERED", "1")
     try:
         sys.stdout.reconfigure(line_buffering=True)

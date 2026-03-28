@@ -11,13 +11,17 @@ os.environ.setdefault("DEBUG", "False")
 from dotenv import load_dotenv
 load_dotenv()
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from src.config.settings import settings
 
-DATABASE_URL = (
-    f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-    f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-)
+
+def _seed_engine():
+    kw: dict = {"echo": False}
+    ca = settings.mysql_connect_args()
+    if ca:
+        kw["connect_args"] = ca
+    return create_async_engine(settings.get_database_url(), **kw)
 
 EXERCISES = [
     {"name": "Sentadillas", "description": "Cuádriceps y glúteos", "muscle_group": "Piernas", "difficulty": "BEGINNER"},
@@ -37,7 +41,7 @@ async def main():
     from sqlalchemy import select
 
     print("=== Insertar ejercicios en FitLife ===\n")
-    engine = create_async_engine(DATABASE_URL, echo=False)
+    engine = _seed_engine()
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with session_factory() as session:
@@ -62,4 +66,7 @@ async def main():
 
 
 if __name__ == "__main__":
+    from src.infrastructure.database.win_asyncio import apply_windows_ssl_asyncio_fix
+
+    apply_windows_ssl_asyncio_fix()
     asyncio.run(main())

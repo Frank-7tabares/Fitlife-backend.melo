@@ -16,12 +16,14 @@ from src.application.use_cases.message_use_cases import (
     MarkMessageAsRead,
     GetConversation,
     MarkThreadRead,
+    GetCoachInbox,
 )
 from src.application.dtos.message_dtos import (
     SendMessageRequest,
     MessageResponse,
     MessageListResponse,
     ConversationResponse,
+    CoachInboxResponse,
 )
 from src.domain.entities.user import User, UserRole
 from ..dependencies import get_current_user
@@ -64,6 +66,20 @@ async def send_message(
         if "not assigned" in msg or "no puedes" in msg or "solo " in msg or "no tienes" in msg:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/inbox", response_model=CoachInboxResponse)
+async def get_coach_inbox(
+    current_user: User = Depends(get_current_user),
+    message_repo: SQLAlchemyMessageRepository = Depends(get_message_repo),
+    user_repo: SQLAlchemyUserRepository = Depends(get_user_repo),
+):
+    """Bandeja de conversaciones para instructor/admin (último mensaje y no leídos)."""
+    use_case = GetCoachInbox(message_repo, user_repo)
+    try:
+        return await use_case.execute(current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.get("/user/{user_id}", response_model=MessageListResponse)

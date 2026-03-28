@@ -1,7 +1,10 @@
 """Dependencias compartidas para los adaptadores API (FastAPI Depends)."""
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 
 from ...infrastructure.database.connection import get_db
 from ...infrastructure.repositories.sqlalchemy_user_repository import SQLAlchemyUserRepository
@@ -58,6 +61,27 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cuenta de usuario inactiva",
         )
+    return user
+
+
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+    user_repo: SQLAlchemyUserRepository = Depends(get_user_repository),
+) -> Optional[User]:
+    """JWT opcional: None si no hay token o es inválido (rutas públicas con lógica condicional)."""
+    if not credentials:
+        return None
+    try:
+        payload = JWTService.decode_token(credentials.credentials)
+        raw_sub = payload.get("sub")
+        if not raw_sub:
+            return None
+        user_id = raw_sub if isinstance(raw_sub, UUID) else UUID(str(raw_sub))
+        user = await user_repo.find_by_id(user_id)
+    except Exception:
+        return None
+    if not user or not user.is_active:
+        return None
     return user
 
 
