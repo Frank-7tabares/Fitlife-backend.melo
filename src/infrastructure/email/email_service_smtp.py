@@ -9,7 +9,10 @@ from ...config.settings import settings
 logger = logging.getLogger(__name__)
 
 def _normalize_app_password(raw: str) -> str:
-    return ''.join((raw or '').split())
+    s = (raw or '').strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+        s = s[1:-1].strip()
+    return ''.join(s.split())
 
 class SmtpEmailService:
 
@@ -47,11 +50,11 @@ class SmtpEmailService:
                 try:
                     if port == 465:
                         context = ssl.create_default_context()
-                        with smtplib.SMTP_SSL(host, port, context=context, timeout=25) as server:
+                        with smtplib.SMTP_SSL(host, port, context=context, timeout=20) as server:
                             server.login(email_user, email_password)
                             server.sendmail(from_addr, [to_email], msg.as_string())
                     else:
-                        server = smtplib.SMTP(host, port, timeout=25)
+                        server = smtplib.SMTP(host, port, timeout=20)
                         try:
                             server.ehlo()
                             server.starttls(context=ssl.create_default_context())

@@ -1,11 +1,8 @@
-import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
 from uuid import uuid4
 from datetime import datetime, timedelta
 import secrets
-from starlette.background import BackgroundTasks
 from ...domain.repositories.user_repository import UserRepository
 from ...domain.repositories.password_reset_token_repository import PasswordResetTokenRepository
 from ...domain.entities.password_reset_token import PasswordResetToken, ResetTokenStatus
@@ -26,7 +23,7 @@ def _make_log_reset():
             pass
     return _write
 
-async def _send_password_reset_email_safe(to_email: str, reset_token_value: str, user_name: str) -> None:
+async def _send_password_reset_email_safe(to_email: str, reset_token_value: str, user_name: str) -> bool:
     _log_reset = _make_log_reset()
     try:
         sent = await SmtpEmailService.send_password_reset_email(
@@ -35,13 +32,15 @@ async def _send_password_reset_email_safe(to_email: str, reset_token_value: str,
         if sent:
             print(f'[PasswordReset] Email enviado a {to_email}', flush=True)
             _log_reset('EMAIL_ENVIADO', to_email)
-        else:
-            print('[PasswordReset] SmtpEmailService no pudo enviar', flush=True)
-            _log_reset('EMAIL_NO_ENVIADO', 'SmtpEmailService retornó False')
+            return True
+        print('[PasswordReset] SmtpEmailService no pudo enviar', flush=True)
+        _log_reset('EMAIL_NO_ENVIADO', 'SmtpEmailService retornó False')
+        return False
     except Exception as e:
         print(f'[PasswordReset] Error enviando email: {e}', flush=True)
         _log_reset('EMAIL_ERROR', str(e))
-        logger.exception('Password reset email background task failed')
+        logger.exception('Password reset email failed')
+        return False
 
 
 class PasswordResetRequest:
@@ -50,7 +49,7 @@ class PasswordResetRequest:
         self.user_repository = user_repository
         self.reset_token_repository = reset_token_repository
 
-    async def execute(self, request: PasswordResetRequestDto, background_tasks: Optional[BackgroundTasks]=None) -> dict:
+    async def execute(self, request: PasswordResetRequestDto) -> dict:
         email = str(request.email).strip().lower()
         user = await self.user_repository.find_by_email(email)
         found = 'sí' if user else 'NO'
@@ -64,17 +63,16 @@ class PasswordResetRequest:
             _make_log_reset()('USUARIO_NO_ENCONTRADO', email)
         reset_token_value = f'{secrets.randbelow(1000000):06d}'
         expires_at = datetime.utcnow() + timedelta(hours=1)
+        email_sent = False
         if user:
             reset_token = PasswordResetToken(id=uuid4(), user_id=user.id, token=reset_token_value, expires_at=expires_at, status=ResetTokenStatus.PENDING, created_at=datetime.utcnow())
             await self.reset_token_repository.save(reset_token)
             user_name = (user.full_name or 'Usuario').replace('"', "'").replace('\n', ' ')[:50]
-            if background_tasks is not None:
-                background_tasks.add_task(_send_password_reset_email_safe, user.email, reset_token_value, user_name)
-            else:
-                asyncio.create_task(_send_password_reset_email_safe(user.email, reset_token_value, user_name))
+            print('[PasswordReset] Enviando correo (SMTP) antes de responder…', flush=True)
+            email_sent = await _send_password_reset_email_safe(user.email, reset_token_value, user_name)
         response = {'message': 'Si el email está registrado, recibirás un código de verificación para cambiar la contraseña.'}
         debug_data = {'user_found': bool(user), '_backend': 'fitlife-local'}
         if getattr(settings, 'DEBUG', False) and user:
-            debug_data['email_send'] = 'background'
+            debug_data['email_sent'] = email_sent
         response['debug'] = debug_data
         return response

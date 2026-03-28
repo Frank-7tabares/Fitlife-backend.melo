@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from ....infrastructure.database.connection import get_db
@@ -77,11 +77,11 @@ async def refresh(request: RefreshTokenRequest, user_repo: SQLAlchemyUserReposit
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 @router.post('/password/reset-request', status_code=status.HTTP_200_OK)
-async def reset_password_request(request: PasswordResetRequestDto, background_tasks: BackgroundTasks, user_repo: SQLAlchemyUserRepository=Depends(get_user_repository), reset_token_repo: SQLAlchemyPasswordResetTokenRepository=Depends(get_password_reset_token_repository)):
+async def reset_password_request(request: PasswordResetRequestDto, user_repo: SQLAlchemyUserRepository=Depends(get_user_repository), reset_token_repo: SQLAlchemyPasswordResetTokenRepository=Depends(get_password_reset_token_repository)):
     print(f'[API] POST /auth/password/reset-request email={request.email}', flush=True)
     use_case = PasswordResetRequest(user_repo, reset_token_repo)
     try:
-        return await use_case.execute(request, background_tasks=background_tasks)
+        return await use_case.execute(request)
     except Exception as e:
         detail = str(e) if getattr(settings, 'DEBUG', False) else 'Error al procesar solicitud'
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
