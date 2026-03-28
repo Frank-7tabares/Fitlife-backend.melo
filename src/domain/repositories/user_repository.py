@@ -4,6 +4,7 @@ from uuid import UUID
 from ..entities.user import User
 
 class UserRepository(ABC):
+
     @abstractmethod
     async def save(self, user: User) -> User:
         pass

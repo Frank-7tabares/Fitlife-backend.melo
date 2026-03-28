@@ -6,10 +6,9 @@ import uuid
 from ....domain.entities.assessment import AssessmentCategory, BodyAgeComparison
 
 class AssessmentModel(Base):
-    __tablename__ = "assessments"
-
+    __tablename__ = 'assessments'
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(CHAR(36), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     fitness_score = Column(Float, nullable=False)
     category = Column(SQLEnum(AssessmentCategory), nullable=False)
     body_age = Column(Float, nullable=False)

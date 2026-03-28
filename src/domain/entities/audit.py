@@ -7,6 +7,6 @@ from typing import Dict, Any
 class ProfileAuditLog:
     id: UUID
     user_id: UUID
-    changed_by: UUID  # User ID of the person making the change
+    changed_by: UUID
     changes: Dict[str, Any]
     timestamp: datetime

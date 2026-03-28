@@ -4,14 +4,12 @@ from enum import Enum
 from uuid import UUID
 from typing import Optional
 
-
 class ActivityLevel(str, Enum):
-    SEDENTARY = "SEDENTARY"
-    LIGHT = "LIGHT"
-    MODERATE = "MODERATE"
-    ACTIVE = "ACTIVE"
-    VERY_ACTIVE = "VERY_ACTIVE"
-
+    SEDENTARY = 'SEDENTARY'
+    LIGHT = 'LIGHT'
+    MODERATE = 'MODERATE'
+    ACTIVE = 'ACTIVE'
+    VERY_ACTIVE = 'VERY_ACTIVE'
 
 @dataclass
 class PhysicalRecord:
@@ -27,4 +25,4 @@ class PhysicalRecord:
 
     @property
     def bmi(self) -> float:
-        return self.weight / ((self.height / 100) ** 2)
+        return self.weight / (self.height / 100) ** 2

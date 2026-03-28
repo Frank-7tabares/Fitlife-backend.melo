@@ -5,10 +5,9 @@ from ..connection import Base
 import uuid
 
 class ProfileAuditLogModel(Base):
-    __tablename__ = "profile_audit_logs"
-
+    __tablename__ = 'profile_audit_logs'
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    changed_by = Column(CHAR(36), ForeignKey("users.id"), nullable=False)
+    user_id = Column(CHAR(36), ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    changed_by = Column(CHAR(36), ForeignKey('users.id'), nullable=False)
     changes = Column(JSON, nullable=False)
     timestamp = Column(DateTime, server_default=func.now())

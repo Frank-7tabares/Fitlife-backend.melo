@@ -5,10 +5,9 @@ from ..connection import Base
 import uuid
 
 class NutritionPlanModel(Base):
-    __tablename__ = "nutrition_plans"
-
+    __tablename__ = 'nutrition_plans'
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(CHAR(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(CHAR(36), ForeignKey('users.id'), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     description = Column(String(500))
     week_number = Column(Integer, nullable=False)

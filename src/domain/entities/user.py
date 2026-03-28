@@ -5,24 +5,22 @@ from enum import Enum
 from typing import Optional
 
 class UserRole(str, Enum):
-    USER = "USER"
-    INSTRUCTOR = "INSTRUCTOR"
-    ADMIN = "ADMIN"
+    USER = 'USER'
+    INSTRUCTOR = 'INSTRUCTOR'
+    ADMIN = 'ADMIN'
 
 class Gender(str, Enum):
-    """Género del usuario (RF-042)."""
-    MALE = "MALE"
-    FEMALE = "FEMALE"
-    OTHER = "OTHER"
-    PREFER_NOT_TO_SAY = "PREFER_NOT_TO_SAY"
+    MALE = 'MALE'
+    FEMALE = 'FEMALE'
+    OTHER = 'OTHER'
+    PREFER_NOT_TO_SAY = 'PREFER_NOT_TO_SAY'
 
 class FitnessGoal(str, Enum):
-    """Objetivo fitness del usuario (RF-038)."""
-    WEIGHT_LOSS = "WEIGHT_LOSS"
-    MUSCLE_GAIN = "MUSCLE_GAIN"
-    GENERAL_FITNESS = "GENERAL_FITNESS"
-    ATHLETIC_PERFORMANCE = "ATHLETIC_PERFORMANCE"
-    HEALTH_MAINTENANCE = "HEALTH_MAINTENANCE"
+    WEIGHT_LOSS = 'WEIGHT_LOSS'
+    MUSCLE_GAIN = 'MUSCLE_GAIN'
+    GENERAL_FITNESS = 'GENERAL_FITNESS'
+    ATHLETIC_PERFORMANCE = 'ATHLETIC_PERFORMANCE'
+    HEALTH_MAINTENANCE = 'HEALTH_MAINTENANCE'
 
 @dataclass
 class User:
@@ -35,7 +33,6 @@ class User:
     updated_at: Optional[datetime] = None
     full_name: Optional[str] = None
     version: int = 1
-    # Profile fields (RF-026 to RF-042)
     age: Optional[int] = None
     gender: Optional[Gender] = None
     height: Optional[float] = None

@@ -6,8 +6,7 @@ import uuid
 from src.domain.entities.user import UserRole, Gender, FitnessGoal
 
 class UserModel(Base):
-    __tablename__ = "users"
-
+    __tablename__ = 'users'
     id = Column(CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
@@ -15,7 +14,6 @@ class UserModel(Base):
     is_active = Column(Boolean, default=True)
     full_name = Column(String(255), nullable=True)
     version = Column(Integer, default=1, nullable=False)
-    # Profile fields (RF-026 to RF-042)
     age = Column(Integer, nullable=True)
     gender = Column(SQLEnum(Gender), nullable=True)
     height = Column(Float, nullable=True)

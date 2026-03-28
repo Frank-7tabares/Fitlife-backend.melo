@@ -7,22 +7,12 @@ from ..database.models.training_models import RoutineModel, ExerciseModel
 from ..database.models.training_assignment_models import RoutineAssignmentModel, WorkoutCompletionModel
 
 class SQLAlchemyTrainingRepository:
+
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def save_routine(self, routine: Routine) -> Routine:
-        model = RoutineModel(
-            id=str(routine.id),
-            name=routine.name,
-            description=routine.description,
-            goal=routine.goal,
-            level=routine.level,
-            exercises_data=[
-                {"exercise_id": str(e.exercise_id), "sets": e.sets, "reps": e.reps, "rest_seconds": e.rest_seconds}
-                for e in routine.exercises
-            ],
-            creator_id=str(routine.creator_id)
-        )
+        model = RoutineModel(id=str(routine.id), name=routine.name, description=routine.description, goal=routine.goal, level=routine.level, exercises_data=[{'exercise_id': str(e.exercise_id), 'sets': e.sets, 'reps': e.reps, 'rest_seconds': e.rest_seconds} for e in routine.exercises], creator_id=str(routine.creator_id))
         self.session.add(model)
         await self.session.commit()
         return routine
@@ -46,11 +36,8 @@ class SQLAlchemyTrainingRepository:
         m.description = routine.description
         m.goal = routine.goal
         m.level = routine.level
-        m.exercises_data = [
-            {"exercise_id": str(e.exercise_id), "sets": e.sets, "reps": e.reps, "rest_seconds": e.rest_seconds}
-            for e in routine.exercises
-        ]
-        flag_modified(m, "exercises_data")
+        m.exercises_data = [{'exercise_id': str(e.exercise_id), 'sets': e.sets, 'reps': e.reps, 'rest_seconds': e.rest_seconds} for e in routine.exercises]
+        flag_modified(m, 'exercises_data')
         await self.session.commit()
         return routine
 
@@ -69,7 +56,6 @@ class SQLAlchemyTrainingRepository:
         return [self._to_entity(m) for m in result.scalars().all()]
 
     async def delete_routines_by_creator(self, creator_id: UUID) -> int:
-        """Elimina todas las rutinas creadas por un usuario. Devuelve la cantidad eliminada."""
         routines = await self.find_routines_by_creator(creator_id)
         for r in routines:
             await self.delete_routine(r.id)
@@ -78,27 +64,9 @@ class SQLAlchemyTrainingRepository:
     async def get_exercise_names(self, ids: List[UUID]) -> Dict[UUID, str]:
         if not ids:
             return {}
-        stmt = select(ExerciseModel.id, ExerciseModel.name).where(
-            ExerciseModel.id.in_([str(i) for i in ids])
-        )
+        stmt = select(ExerciseModel.id, ExerciseModel.name).where(ExerciseModel.id.in_([str(i) for i in ids]))
         result = await self.session.execute(stmt)
         return {UUID(row.id): row.name for row in result.all()}
 
     def _to_entity(self, m: RoutineModel) -> Routine:
-        return Routine(
-            id=UUID(m.id),
-            name=m.name,
-            description=m.description,
-            goal=m.goal,
-            level=m.level,
-            exercises=[
-                RoutineExercise(
-                    exercise_id=UUID(e["exercise_id"]),
-                    sets=e["sets"],
-                    reps=e["reps"],
-                    rest_seconds=e["rest_seconds"]
-                )
-                for e in m.exercises_data
-            ],
-            creator_id=UUID(m.creator_id)
-        )
+        return Routine(id=UUID(m.id), name=m.name, description=m.description, goal=m.goal, level=m.level, exercises=[RoutineExercise(exercise_id=UUID(e['exercise_id']), sets=e['sets'], reps=e['reps'], rest_seconds=e['rest_seconds']) for e in m.exercises_data], creator_id=UUID(m.creator_id))

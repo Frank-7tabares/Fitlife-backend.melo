@@ -5,9 +5,9 @@ from enum import Enum
 from typing import List, Optional
 
 class FitnessLevel(str, Enum):
-    BEGINNER = "BEGINNER"
-    INTERMEDIATE = "INTERMEDIATE"
-    ADVANCED = "ADVANCED"
+    BEGINNER = 'BEGINNER'
+    INTERMEDIATE = 'INTERMEDIATE'
+    ADVANCED = 'ADVANCED'
 
 @dataclass
 class Exercise:
@@ -32,7 +32,7 @@ class Routine:
     goal: str
     level: FitnessLevel
     exercises: List[RoutineExercise]
-    creator_id: UUID  # Instructor ID
+    creator_id: UUID
 
 @dataclass
 class RoutineAssignment:
@@ -47,5 +47,5 @@ class WorkoutCompletion:
     user_id: UUID
     routine_id: UUID
     completed_at: datetime
-    effort_level: int  # 1-10
+    effort_level: int
     notes: Optional[str]

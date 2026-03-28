@@ -14,7 +14,7 @@ class Meal:
 
 @dataclass
 class DailyPlan:
-    day_of_week: int  # 0-6 (Monday-Sunday)
+    day_of_week: int
     meals: List[Meal]
 
 @dataclass
@@ -23,7 +23,7 @@ class NutritionPlan:
     user_id: UUID
     name: str
     description: str
-    week_number: int  # ISO week
+    week_number: int
     year: int
     daily_plans: List[DailyPlan]
     is_active: bool
