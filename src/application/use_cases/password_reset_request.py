@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import threading
 from pathlib import Path
@@ -8,7 +9,7 @@ from ...domain.repositories.user_repository import UserRepository
 from ...domain.repositories.password_reset_token_repository import PasswordResetTokenRepository
 from ...domain.entities.password_reset_token import PasswordResetToken, ResetTokenStatus
 from ..dtos.auth_dtos import PasswordResetRequestDto
-from ...infrastructure.email.email_service_smtp import SmtpEmailService
+from ...infrastructure.email.email_outbound import send_password_reset_sync
 from ...config.settings import settings
 logger = logging.getLogger('fitlife.password_reset')
 
@@ -27,15 +28,14 @@ def _make_log_reset():
 async def _send_password_reset_email_safe(to_email: str, reset_token_value: str, user_name: str) -> bool:
     _log_reset = _make_log_reset()
     try:
-        sent = await SmtpEmailService.send_password_reset_email(
-            to_email=to_email, reset_token=reset_token_value, user_name=user_name
-        )
+        loop = asyncio.get_running_loop()
+        sent = await loop.run_in_executor(None, lambda: send_password_reset_sync(to_email, reset_token_value, user_name))
         if sent:
             print(f'[PasswordReset] Email enviado a {to_email}', flush=True)
             _log_reset('EMAIL_ENVIADO', to_email)
             return True
-        print('[PasswordReset] SmtpEmailService no pudo enviar', flush=True)
-        _log_reset('EMAIL_NO_ENVIADO', 'SmtpEmailService retornó False')
+        print('[PasswordReset] No se pudo enviar el correo', flush=True)
+        _log_reset('EMAIL_NO_ENVIADO', 'send_password_reset_sync retornó False')
         return False
     except Exception as e:
         print(f'[PasswordReset] Error enviando email: {e}', flush=True)
@@ -47,13 +47,13 @@ async def _send_password_reset_email_safe(to_email: str, reset_token_value: str,
 def _send_password_reset_email_in_thread(to_email: str, reset_token_value: str, user_name: str) -> None:
     _log_reset = _make_log_reset()
     try:
-        sent = SmtpEmailService._send_password_reset_email_sync(to_email, reset_token_value, user_name)
+        sent = send_password_reset_sync(to_email, reset_token_value, user_name)
         if sent:
             print(f'[PasswordReset] Email enviado a {to_email}', flush=True)
             _log_reset('EMAIL_ENVIADO', to_email)
         else:
-            print('[PasswordReset] SmtpEmailService no pudo enviar', flush=True)
-            _log_reset('EMAIL_NO_ENVIADO', 'SmtpEmailService retornó False')
+            print('[PasswordReset] No se pudo enviar el correo', flush=True)
+            _log_reset('EMAIL_NO_ENVIADO', 'send_password_reset_sync retornó False')
     except Exception as e:
         print(f'[PasswordReset] Error enviando email (hilo): {e}', flush=True)
         _log_reset('EMAIL_ERROR', str(e))

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = 'http://localhost:4200,http://localhost:5173,http://127.0.0.1:5173'
     ADMIN_REGISTER_CODE: str = 'fitlife-admin-2026'
     PASSWORD_RESET_EMAIL_SYNC: bool = False
+    RESEND_API_KEY: Optional[str] = None
+    RESEND_FROM: Optional[str] = None
 
     @computed_field
     @property

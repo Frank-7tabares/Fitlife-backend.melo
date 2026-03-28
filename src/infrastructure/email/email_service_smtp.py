@@ -8,6 +8,10 @@ from email.utils import formataddr
 from ...config.settings import settings
 logger = logging.getLogger(__name__)
 
+def _send_password_reset_via_outbound(to_email: str, reset_token: str, user_name: str='') -> bool:
+    from .email_outbound import send_password_reset_sync
+    return send_password_reset_sync(to_email, reset_token, user_name)
+
 def _normalize_app_password(raw: str) -> str:
     s = (raw or '').strip()
     if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
@@ -92,7 +96,7 @@ class SmtpEmailService:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, lambda: SmtpEmailService._send_password_reset_email_sync(to_email, reset_token, user_name))
+        return await loop.run_in_executor(None, lambda: _send_password_reset_via_outbound(to_email, reset_token, user_name))
 
     @staticmethod
     async def send_welcome_email(to_email: str, user_name: str) -> bool:
