@@ -14,6 +14,7 @@ from ....application.use_cases.password_reset_request import PasswordResetReques
 from ....application.use_cases.password_reset import PasswordReset
 from ....application.use_cases.password_change import PasswordChange
 from ....application.dtos.auth_dtos import RegisterUserRequest, LoginUserRequest, RefreshTokenRequest, PasswordResetRequestDto, PasswordResetVerifyCodeDto, PasswordResetDto, PasswordChangeDto, TokenResponse, RegisterResponse, PasswordChangeResponse
+from ....application.password_reset_token_variants import password_reset_token_lookup_variants
 from ....application.exceptions import EmailAlreadyRegisteredError
 from ....config.settings import settings
 router = APIRouter(prefix='/auth', tags=['Authentication'])
@@ -96,7 +97,11 @@ async def reset_password(request: PasswordResetDto, user_repo: SQLAlchemyUserRep
 
 @router.post('/password/verify-code', status_code=status.HTTP_200_OK)
 async def verify_reset_code(request: PasswordResetVerifyCodeDto, user_repo: SQLAlchemyUserRepository=Depends(get_user_repository), reset_token_repo: SQLAlchemyPasswordResetTokenRepository=Depends(get_password_reset_token_repository)):
-    token_entity = await reset_token_repo.find_by_token(request.token)
+    token_entity = None
+    for variant in password_reset_token_lookup_variants(request.token):
+        token_entity = await reset_token_repo.find_by_token(variant)
+        if token_entity:
+            break
     if not token_entity:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Código inválido o expirado')
     user = await user_repo.find_by_id(token_entity.user_id)

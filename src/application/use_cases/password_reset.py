@@ -7,6 +7,7 @@ from ...domain.entities.password_reset_token import ResetTokenStatus
 from ...infrastructure.security.password_hasher import PasswordHasher
 from ...infrastructure.security.password_validator import PasswordValidator
 from ..dtos.auth_dtos import PasswordResetDto, PasswordChangeResponse
+from ..password_reset_token_variants import password_reset_token_lookup_variants
 from uuid import uuid4
 
 class PasswordReset:
@@ -19,7 +20,11 @@ class PasswordReset:
     async def execute(self, request: PasswordResetDto) -> PasswordChangeResponse:
         if not request.token or not request.token.strip():
             raise ValueError('Código/token requerido')
-        reset_token = await self.reset_token_repository.find_by_token(request.token)
+        reset_token = None
+        for variant in password_reset_token_lookup_variants(request.token):
+            reset_token = await self.reset_token_repository.find_by_token(variant)
+            if reset_token:
+                break
         if not reset_token:
             raise ValueError('Token inválido o no encontrado')
         if reset_token.status == ResetTokenStatus.USED:
