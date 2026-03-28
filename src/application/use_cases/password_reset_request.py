@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import Any, Optional
 from uuid import uuid4
 from datetime import datetime, timedelta
 import secrets
@@ -49,7 +50,7 @@ class PasswordResetRequest:
         self.user_repository = user_repository
         self.reset_token_repository = reset_token_repository
 
-    async def execute(self, request: PasswordResetRequestDto) -> dict:
+    async def execute(self, request: PasswordResetRequestDto, background_tasks: Optional[Any]=None) -> dict:
         email = str(request.email).strip().lower()
         user = await self.user_repository.find_by_email(email)
         found = 'sí' if user else 'NO'
@@ -68,11 +69,20 @@ class PasswordResetRequest:
             reset_token = PasswordResetToken(id=uuid4(), user_id=user.id, token=reset_token_value, expires_at=expires_at, status=ResetTokenStatus.PENDING, created_at=datetime.utcnow())
             await self.reset_token_repository.save(reset_token)
             user_name = (user.full_name or 'Usuario').replace('"', "'").replace('\n', ' ')[:50]
-            print('[PasswordReset] Enviando correo (SMTP) antes de responder…', flush=True)
-            email_sent = await _send_password_reset_email_safe(user.email, reset_token_value, user_name)
+            use_sync = bool(getattr(settings, 'PASSWORD_RESET_EMAIL_SYNC', False))
+            if background_tasks is not None and not use_sync:
+                print('[PasswordReset] Token guardado; correo SMTP en segundo plano (evita timeout en Render).', flush=True)
+                background_tasks.add_task(_send_password_reset_email_safe, user.email, reset_token_value, user_name)
+                email_sent = None
+            else:
+                print('[PasswordReset] Enviando correo (SMTP) en la misma petición (PASSWORD_RESET_EMAIL_SYNC o sin BackgroundTasks)…', flush=True)
+                email_sent = await _send_password_reset_email_safe(user.email, reset_token_value, user_name)
         response = {'message': 'Si el email está registrado, recibirás un código de verificación para cambiar la contraseña.'}
-        debug_data = {'user_found': bool(user), '_backend': 'fitlife-local'}
+        debug_data = {'user_found': bool(user)}
         if getattr(settings, 'DEBUG', False) and user:
-            debug_data['email_sent'] = email_sent
+            if email_sent is not None:
+                debug_data['email_sent'] = email_sent
+            elif background_tasks is not None and not use_sync:
+                debug_data['email_queued'] = True
         response['debug'] = debug_data
         return response

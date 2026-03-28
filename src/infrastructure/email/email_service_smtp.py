@@ -48,11 +48,12 @@ class SmtpEmailService:
             last_err = None
             for port in ports_to_try:
                 try:
+                    envelope_from = email_user
                     if port == 465:
                         context = ssl.create_default_context()
                         with smtplib.SMTP_SSL(host, port, context=context, timeout=20) as server:
                             server.login(email_user, email_password)
-                            server.sendmail(from_addr, [to_email], msg.as_string())
+                            server.sendmail(envelope_from, [to_email], msg.as_string())
                     else:
                         server = smtplib.SMTP(host, port, timeout=20)
                         try:
@@ -60,7 +61,7 @@ class SmtpEmailService:
                             server.starttls(context=ssl.create_default_context())
                             server.ehlo()
                             server.login(email_user, email_password)
-                            server.sendmail(from_addr, [to_email], msg.as_string())
+                            server.sendmail(envelope_from, [to_email], msg.as_string())
                         finally:
                             server.quit()
                     logger.info(f'Email de restablecimiento enviado a {to_email} (puerto {port})')
