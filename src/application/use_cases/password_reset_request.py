@@ -1,6 +1,6 @@
 import logging
+import threading
 from pathlib import Path
-from typing import Any, Optional
 from uuid import uuid4
 from datetime import datetime, timedelta
 import secrets
@@ -44,13 +44,29 @@ async def _send_password_reset_email_safe(to_email: str, reset_token_value: str,
         return False
 
 
+def _send_password_reset_email_in_thread(to_email: str, reset_token_value: str, user_name: str) -> None:
+    _log_reset = _make_log_reset()
+    try:
+        sent = SmtpEmailService._send_password_reset_email_sync(to_email, reset_token_value, user_name)
+        if sent:
+            print(f'[PasswordReset] Email enviado a {to_email}', flush=True)
+            _log_reset('EMAIL_ENVIADO', to_email)
+        else:
+            print('[PasswordReset] SmtpEmailService no pudo enviar', flush=True)
+            _log_reset('EMAIL_NO_ENVIADO', 'SmtpEmailService retornó False')
+    except Exception as e:
+        print(f'[PasswordReset] Error enviando email (hilo): {e}', flush=True)
+        _log_reset('EMAIL_ERROR', str(e))
+        logger.exception('Password reset email failed (background thread)')
+
+
 class PasswordResetRequest:
 
     def __init__(self, user_repository: UserRepository, reset_token_repository: PasswordResetTokenRepository):
         self.user_repository = user_repository
         self.reset_token_repository = reset_token_repository
 
-    async def execute(self, request: PasswordResetRequestDto, background_tasks: Optional[Any]=None) -> dict:
+    async def execute(self, request: PasswordResetRequestDto) -> dict:
         email = str(request.email).strip().lower()
         user = await self.user_repository.find_by_email(email)
         found = 'sí' if user else 'NO'
@@ -70,19 +86,25 @@ class PasswordResetRequest:
             await self.reset_token_repository.save(reset_token)
             user_name = (user.full_name or 'Usuario').replace('"', "'").replace('\n', ' ')[:50]
             use_sync = bool(getattr(settings, 'PASSWORD_RESET_EMAIL_SYNC', False))
-            if background_tasks is not None and not use_sync:
-                print('[PasswordReset] Token guardado; correo SMTP en segundo plano (evita timeout en Render).', flush=True)
-                background_tasks.add_task(_send_password_reset_email_safe, user.email, reset_token_value, user_name)
+            if not use_sync:
+                print('[PasswordReset] Token guardado; enviando correo SMTP en hilo (Render / sin bloquear HTTP).', flush=True)
+                t = threading.Thread(
+                    target=_send_password_reset_email_in_thread,
+                    args=(user.email, reset_token_value, user_name),
+                    daemon=False,
+                    name='fitlife-password-reset-email',
+                )
+                t.start()
                 email_sent = None
             else:
-                print('[PasswordReset] Enviando correo (SMTP) en la misma petición (PASSWORD_RESET_EMAIL_SYNC o sin BackgroundTasks)…', flush=True)
+                print('[PasswordReset] Enviando correo (SMTP) en la misma petición (PASSWORD_RESET_EMAIL_SYNC=true)…', flush=True)
                 email_sent = await _send_password_reset_email_safe(user.email, reset_token_value, user_name)
         response = {'message': 'Si el email está registrado, recibirás un código de verificación para cambiar la contraseña.'}
         debug_data = {'user_found': bool(user)}
         if getattr(settings, 'DEBUG', False) and user:
             if email_sent is not None:
                 debug_data['email_sent'] = email_sent
-            elif background_tasks is not None and not use_sync:
+            elif not use_sync:
                 debug_data['email_queued'] = True
         response['debug'] = debug_data
         return response
